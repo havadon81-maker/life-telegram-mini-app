@@ -1,450 +1,72 @@
 import { useEffect, useMemo, useState } from "react";
 
 type Tab = "today" | "goals" | "habits" | "ai" | "history";
-type GoalCategory =
-  | "Здоровье"
-  | "Учёба"
-  | "Работа"
-  | "Финансы"
-  | "Развитие"
-  | "Отношения"
-  | "Хобби"
-  | "Путешествия"
-  | "Дом"
-  | "Другое";
-
-type Goal = {
-  id: number;
-  title: string;
-  category: GoalCategory;
-  progress: number;
-  target: number;
-  unit: string;
-  deadline?: string;
-};
-
-type Habit = {
-  id: number;
-  title: string;
-  icon: string;
-  done: boolean;
-};
-
-type LifeEvent = {
-  id: number;
-  title: string;
-  category: string;
-  createdAt: string;
-};
-
-const defaultGoals: Goal[] = [
-  { id: 1, title: "Пробежать 10 км", category: "Здоровье", progress: 5.2, target: 10, unit: "км", deadline: "30 ноя" },
-  { id: 2, title: "Изучать новое каждый день", category: "Развитие", progress: 18, target: 30, unit: "дней" },
-  { id: 3, title: "Закончить важный проект", category: "Работа", progress: 62, target: 100, unit: "%" },
-];
-
-const defaultHabits: Habit[] = [
-  { id: 1, title: "Выпить достаточно воды", icon: "💧", done: true },
-  { id: 2, title: "Тренировка", icon: "🏋️", done: false },
-  { id: 3, title: "30 минут учёбы", icon: "📚", done: true },
-  { id: 4, title: "Лечь до 00:00", icon: "🌙", done: false },
-];
-
-function load<T>(key: string, fallback: T): T {
-  try {
-    const value = localStorage.getItem(key);
-    return value ? (JSON.parse(value) as T) : fallback;
-  } catch {
-    return fallback;
-  }
+type GoalCategory = "Здоровье" | "Учёба" | "Работа" | "Финансы" | "Развитие" | "Отношения" | "Хобби" | "Путешествия" | "Дом" | "Другое";
+type Goal = { id:number; title:string; category:GoalCategory; progress:number; target:number; unit:string; deadline?:string };
+type Habit = { id:number; title:string; icon:string; active:boolean; completions:Record<string,boolean> };
+type Plan = { id:number; title:string; time:string; done:boolean; date:string };
+type Activity = { id:number; title:string; category:string; time:string; value:number; unit:string; note:string; date:string };
+type DayData = { sleepStart:string; wakeTime:string; energy:number; mood:number; weight:string; water:number; steps:number; note:string };
+type LifeEvent = { id:number; title:string; category:string; createdAt:string; date:string };
+const todayKey = () => localDateKey(new Date());
+function localDateKey(d:Date){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+function load<T>(key:string, fallback:T):T{try{const v=localStorage.getItem(key);return v?JSON.parse(v) as T:fallback;}catch{return fallback;}}
+const categories:GoalCategory[]=["Здоровье","Учёба","Работа","Финансы","Развитие","Отношения","Хобби","Путешествия","Дом","Другое"];
+const defaultGoals:Goal[]=[{id:1,title:"Пробежать 10 км",category:"Здоровье",progress:5.2,target:10,unit:"км"},{id:2,title:"Изучать новое каждый день",category:"Развитие",progress:18,target:30,unit:"дней"},{id:3,title:"Закончить важный проект",category:"Работа",progress:62,target:100,unit:"%"}];
+const defaultHabits:Habit[]=[{id:1,title:"Выпить достаточно воды",icon:"💧",active:true,completions:{}},{id:2,title:"Тренировка",icon:"🏋️",active:true,completions:{}},{id:3,title:"30 минут учёбы",icon:"📚",active:true,completions:{}},{id:4,title:"Лечь вовремя",icon:"🌙",active:true,completions:{}}];
+const blankDay=():DayData=>({sleepStart:"00:00",wakeTime:"08:00",energy:7,mood:7,weight:"",water:0,steps:0,note:""});
+function App(){
+ const [tab,setTab]=useState<Tab>("today"); const [goals,setGoals]=useState<Goal[]>(()=>load("life-goals",defaultGoals)); const [habits,setHabits]=useState<Habit[]>(()=>load("life-habits-v3",load<Array<Partial<Habit>&{done?:boolean}>>("life-habits",defaultHabits).map(h=>({...h,active:h.active??true,completions:h.completions??(h.done?{[todayKey()]:true}:{})}) as Habit)));
+ const [plans,setPlans]=useState<Plan[]>(()=>load("life-plans-v3",[])); const [activities,setActivities]=useState<Activity[]>(()=>load("life-activities-v3",[])); const [days,setDays]=useState<Record<string,DayData>>(()=>load("life-days-v3",{})); const [events,setEvents]=useState<LifeEvent[]>(()=>load("life-events-v3",load<Array<Partial<LifeEvent>>>("life-events",[]).map(e=>({...e,date:e.date||(e.createdAt?e.createdAt.slice(0,10):todayKey())}) as LifeEvent)));
+ const [selectedDate,setSelectedDate]=useState(todayKey()); const [modal,setModal]=useState<"activity"|"plan"|"habit"|"goal"|"event"|null>(null); const [profile,setProfile]=useState(false); const [aiInput,setAiInput]=useState("");
+ const [activityTitle,setActivityTitle]=useState(""); const [activityCategory,setActivityCategory]=useState("Тренировка"); const [activityTime,setActivityTime]=useState("17:00"); const [activityValue,setActivityValue]=useState("1"); const [activityUnit,setActivityUnit]=useState("раз"); const [activityNote,setActivityNote]=useState("");
+ const [planTitle,setPlanTitle]=useState(""); const [planTime,setPlanTime]=useState("09:00"); const [habitTitle,setHabitTitle]=useState(""); const [goalTitle,setGoalTitle]=useState(""); const [goalCategory,setGoalCategory]=useState<GoalCategory>("Здоровье"); const [goalTarget,setGoalTarget]=useState("10"); const [goalUnit,setGoalUnit]=useState("км"); const [eventTitle,setEventTitle]=useState(""); const [eventCategory,setEventCategory]=useState("Личное");
+ useEffect(()=>localStorage.setItem("life-goals",JSON.stringify(goals)),[goals]); useEffect(()=>localStorage.setItem("life-habits-v3",JSON.stringify(habits)),[habits]); useEffect(()=>localStorage.setItem("life-plans-v3",JSON.stringify(plans)),[plans]); useEffect(()=>localStorage.setItem("life-activities-v3",JSON.stringify(activities)),[activities]); useEffect(()=>localStorage.setItem("life-days-v3",JSON.stringify(days)),[days]); useEffect(()=>localStorage.setItem("life-events-v3",JSON.stringify(events)),[events]);
+ const day=days[selectedDate]||blankDay(); const todayHabits=habits.filter(h=>h.active); const doneHabits=todayHabits.filter(h=>h.completions[selectedDate]).length; const dayPlans=plans.filter(p=>p.date===selectedDate).sort((a,b)=>a.time.localeCompare(b.time)); const dayActivities=activities.filter(a=>a.date===selectedDate).sort((a,b)=>a.time.localeCompare(b.time)); const dayEvents=events.filter(e=>e.date===selectedDate);
+ const sleepHours=useMemo(()=>{const [sh,sm]=day.sleepStart.split(":").map(Number);const [wh,wm]=day.wakeTime.split(":").map(Number);let mins=wh*60+wm-(sh*60+sm);if(mins<=0)mins+=1440;return `${Math.floor(mins/60)}ч ${mins%60}м`;},[day.sleepStart,day.wakeTime]);
+ const avgGoal=Math.round(goals.reduce((s,g)=>s+Math.min(g.progress/Math.max(g.target,1),1),0)/Math.max(goals.length,1)*100); const telegramUser=window.Telegram?.WebApp?.initDataUnsafe.user; const displayName=telegramUser?.first_name||"Твоя жизнь";
+ function updateDay<K extends keyof DayData>(key:K,value:DayData[K]){setDays(old=>({...old,[selectedDate]:{...(old[selectedDate]||blankDay()),[key]:value}}));}
+ function toggleHabit(id:number){setHabits(old=>old.map(h=>h.id===id?{...h,completions:{...h.completions,[selectedDate]:!h.completions[selectedDate]}}:h));}
+ function addActivity(){if(!activityTitle.trim())return;setActivities(old=>[{id:Date.now(),title:activityTitle.trim(),category:activityCategory,time:activityTime,value:Number(activityValue)||0,unit:activityUnit,note:activityNote,date:selectedDate},...old]);setActivityTitle("");setActivityValue("1");setActivityNote("");setModal(null);}
+ function addPlan(){if(!planTitle.trim())return;setPlans(old=>[...old,{id:Date.now(),title:planTitle.trim(),time:planTime,done:false,date:selectedDate},...old]);setPlanTitle("");setModal(null);}
+ function addHabit(){if(!habitTitle.trim())return;setHabits(old=>[...old,{id:Date.now(),title:habitTitle.trim(),icon:"✦",active:true,completions:{} }]);setHabitTitle("");setModal(null);}
+ function addGoal(){if(!goalTitle.trim())return;setGoals(old=>[...old,{id:Date.now(),title:goalTitle.trim(),category:goalCategory,progress:0,target:Number(goalTarget)||1,unit:goalUnit}]);setGoalTitle("");setModal(null);}
+ function addEvent(){if(!eventTitle.trim())return;setEvents(old=>[{id:Date.now(),title:eventTitle.trim(),category:eventCategory,createdAt:new Date().toISOString(),date:selectedDate},...old]);setEventTitle("");setModal(null);}
+ function togglePlan(id:number){setPlans(old=>old.map(p=>p.id===id?{...p,done:!p.done}:p));}
+ function exportBackup(){const blob=new Blob([JSON.stringify({app:"LIFE",version:3,exportedAt:new Date().toISOString(),goals,habits,plans,activities,days,events},null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`life-backup-${todayKey()}.json`;a.click();URL.revokeObjectURL(url);}
+ function importBackup(file?:File){if(!file)return;const r=new FileReader();r.onload=()=>{try{const b=JSON.parse(String(r.result));if(!Array.isArray(b.goals)||!Array.isArray(b.habits))throw Error();setGoals(b.goals);setHabits(b.habits);setPlans(Array.isArray(b.plans)?b.plans:[]);setActivities(Array.isArray(b.activities)?b.activities:[]);setDays(b.days||{});setEvents(Array.isArray(b.events)?b.events:[]);alert("Данные восстановлены");}catch{alert("Не удалось прочитать резервную копию LIFE");}};r.readAsText(file);}
+ const dateLabel=(key:string)=>new Date(`${key}T12:00:00`).toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"});
+ const weekDays=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7)+i);return localDateKey(d);});
+ const metricUnits=["раз","мин","ч","м","км","шагов","кг","ккал","мл","л","%","страниц","повторений","подходов","₽","шт."];
+ return <div className="app"><header className="topbar"><div><div className="eyebrow">LIFE / DIGITAL MIRROR</div><h1>{tab==="today"?`Привет, ${displayName}`:({goals:"Мои цели",habits:"Привычки",ai:"AI советник",history:"История",today:"Сегодня"} as Record<Tab,string>)[tab]}</h1></div><button className="avatar-button" onClick={()=>setProfile(true)} aria-label="Профиль"><span className="pixel-avatar">🙂</span></button></header>
+ <main className="content">
+ {tab==="today"&&<><section className="hero-card"><div><span className="muted">{dateLabel(selectedDate)}</span><h2>Твой день</h2><p>Не идеальный. Просто реальный.</p></div><div className="life-score"><strong>{avgGoal}</strong><span>фокус %</span></div></section>
+ <div className="week-strip">{weekDays.map(d=><button key={d} className={`week-day ${d===selectedDate?"selected":""}`} onClick={()=>setSelectedDate(d)}><small>{new Date(`${d}T12:00:00`).toLocaleDateString("ru-RU",{weekday:"short"})}</small><strong>{Number(d.slice(-2))}</strong><i>{activities.some(a=>a.date===d)||plans.some(p=>p.date===d)||habits.some(h=>h.completions[d])?"•":""}</i></button>)}</div>
+ <section className="panel"><SectionTitle title="Сон и состояние"/><div className="form-grid"><label>Лёг спать<input type="time" value={day.sleepStart} onChange={e=>updateDay("sleepStart",e.target.value)}/></label><label>Проснулся<input type="time" value={day.wakeTime} onChange={e=>updateDay("wakeTime",e.target.value)}/></label></div><div className="sleep-summary"><span>Продолжительность сна</span><strong>🌙 {sleepHours}</strong></div><div className="form-grid"><label>Энергия · {day.energy}/10<input type="range" min="1" max="10" value={day.energy} onChange={e=>updateDay("energy",Number(e.target.value))}/></label><label>Настроение · {day.mood}/10<input type="range" min="1" max="10" value={day.mood} onChange={e=>updateDay("mood",Number(e.target.value))}/></label><label>Вес, кг<input type="number" min="0" step="0.1" placeholder="Напр. 95.2" value={day.weight} onChange={e=>updateDay("weight",e.target.value)}/></label><label>Вода, мл<input type="number" min="0" step="100" value={day.water} onChange={e=>updateDay("water",Number(e.target.value))}/></label><label>Шаги, шт.<input type="number" min="0" step="100" value={day.steps} onChange={e=>updateDay("steps",Number(e.target.value))}/></label></div><label className="wide-label">Заметка о дне<textarea value={day.note} onChange={e=>updateDay("note",e.target.value)} placeholder="Как себя чувствовал, что важно запомнить…" rows={2}/></label></section>
+ <div className="quick-actions"><button className="primary" onClick={()=>setModal("activity")}>＋ Активность</button><button className="secondary" onClick={()=>setModal("plan")}>＋ План</button><button className="secondary" onClick={()=>setModal("event")}>＋ Запись</button></div>
+ <div className="metric-grid"><Metric icon="🌙" label="Сон" value={sleepHours} note="по времени сна"/><Metric icon="⚡" label="Энергия" value={`${day.energy}/10`} note="самооценка"/><Metric icon="🚶" label="Шаги" value={day.steps.toLocaleString("ru-RU")} note="шагов за день"/><Metric icon="💧" label="Вода" value={`${day.water} мл`} note="выпито"/></div>
+ <SectionTitle title="План на день" action="＋ Добавить" onClick={()=>setModal("plan")}/>{dayPlans.length===0?<Empty text="Пока нет планов. Добавь дела и отмечай выполнение."/>:<div className="item-list">{dayPlans.map(p=><div className={`editable-row ${p.done?"is-done":""}`} key={p.id}><button className="check" onClick={()=>togglePlan(p.id)}>{p.done?"✓":""}</button><span className="item-time">{p.time}</span><strong>{p.title}</strong><button className="delete" onClick={()=>setPlans(old=>old.filter(x=>x.id!==p.id))}>×</button></div>)}</div>}
+ <SectionTitle title="Активность" action="＋ Добавить" onClick={()=>setModal("activity")}/>{dayActivities.length===0?<Empty text="Добавляй тренировки, прогулки, учёбу и любые измеримые дела."/>:<div className="activity-list">{dayActivities.map(a=><article className="activity-card" key={a.id}><div className="activity-symbol">{a.category==="Тренировка"?"🏋️":a.category==="Прогулка"?"🚶":a.category==="Учёба"?"📚":"✦"}</div><div className="activity-info"><strong>{a.title}</strong><p>{a.category} · {a.time}{a.note?` · ${a.note}`:""}</p></div><div className="activity-amount">{a.value} <small>{a.unit}</small></div><button className="delete" onClick={()=>setActivities(old=>old.filter(x=>x.id!==a.id))}>×</button></article>)}</div>}
+ <SectionTitle title="Полезные привычки" action={`${doneHabits}/${todayHabits.length}`}/><div className="habit-list">{todayHabits.map(h=><div className={`habit-row ${h.completions[selectedDate]?"done":""}`} key={h.id}><button className="habit-toggle" onClick={()=>toggleHabit(h.id)}><span className="habit-icon">{h.icon}</span><span>{h.title}</span><span className="check">{h.completions[selectedDate]?"✓":""}</span></button><button className="delete" onClick={()=>setHabits(old=>old.filter(x=>x.id!==h.id))}>×</button></div>)}</div><button className="outline full" onClick={()=>setModal("habit")}>＋ Добавить привычку</button></>}
+ {tab==="goals"&&<><div className="section-head"><div><span className="muted">Измеримый прогресс</span><h2>Мои цели</h2></div><button className="primary small" onClick={()=>setModal("goal")}>＋ Цель</button></div>{goals.length===0?<Empty text="Создай первую цель и выбери единицу измерения."/>:<div className="goal-list">{goals.map(g=>{const pct=Math.max(0,Math.min(Math.round(g.progress/Math.max(g.target,1)*100),100));return <article className="goal-card" key={g.id}><div className="goal-top"><div><span className="tag">{g.category}</span><h3>{g.title}</h3></div><strong>{pct}%</strong></div><div className="progress"><span style={{width:`${pct}%`}}/></div><div className="goal-bottom"><span>{g.progress} / {g.target} {g.unit}</span><div className="goal-controls"><button onClick={()=>setGoals(old=>old.map(x=>x.id===g.id?{...x,progress:Math.max(0,Number((x.progress-Math.max(x.target*.05,1)).toFixed(2)))}:x))}>−</button><button onClick={()=>setGoals(old=>old.map(x=>x.id===g.id?{...x,progress:Number((x.progress+Math.max(x.target*.05,1)).toFixed(2))}:x))}>＋</button><button className="delete" onClick={()=>setGoals(old=>old.filter(x=>x.id!==g.id))}>×</button></div></div></article>})}</div>}</>}
+ {tab==="habits"&&<><div className="section-head"><div><span className="muted">Регулярность без стресса</span><h2>Полезные привычки</h2></div><button className="primary small" onClick={()=>setModal("habit")}>＋ Привычка</button></div><p className="page-hint">Выбранный день: {dateLabel(selectedDate)}. Переключай дату на вкладке «Сегодня» или в истории.</p><div className="habit-list large">{habits.filter(h=>h.active).map(h=><div className={`habit-row ${h.completions[selectedDate]?"done":""}`} key={h.id}><button className="habit-toggle" onClick={()=>toggleHabit(h.id)}><span className="habit-icon">{h.icon}</span><span>{h.title}</span><span className="check">{h.completions[selectedDate]?"✓":""}</span></button><button className="delete" onClick={()=>setHabits(old=>old.filter(x=>x.id!==h.id))}>Удалить</button></div>)}</div></>}
+ {tab==="ai"&&<><section className="ai-card"><div className="ai-orb">✦</div><div><span className="muted">AI LIFE ADVISER</span><h2>Я смотрю на твою жизнь целиком.</h2><p>Сейчас данные хранятся на устройстве. Эти подсказки — локальные шаблоны, не подключённая AI-модель.</p></div></section><SectionTitle title="Сводка выбранного дня"/><div className="recommendations"><article className="recommendation"><span>🌙</span><p>Сон: {sleepHours}. Энергия: {day.energy}/10, настроение: {day.mood}/10.</p></article><article className="recommendation"><span>✓</span><p>Привычки: {doneHabits} из {todayHabits.length}; планов выполнено {dayPlans.filter(p=>p.done).length} из {dayPlans.length}.</p></article><article className="recommendation"><span>🏃</span><p>Активностей записано: {dayActivities.length}. Шаги: {day.steps.toLocaleString("ru-RU")}, вода: {day.water} мл.</p></article></div><div className="ai-input"><input value={aiInput} onChange={e=>setAiInput(e.target.value)} placeholder="Напиши вопрос о своих данных…"/><button onClick={()=>setAiInput("")}>×</button></div>{aiInput&&<div className="recommendation"><p>Сохрани вопрос в заметку или подключи AI API в следующем этапе. Пока приложение не отправляет личные данные во внешние сервисы.</p></div>}</>}
+ {tab==="history"&&<><section className="hero-card compact"><div><span className="muted">Твоя история</span><h2>Жизнь во времени</h2><p>Нажми на любой день — увидишь сохранённые данные.</p></div><div className="calendar-icon">▦</div></section><div className="history-nav"><button className="secondary" onClick={()=>{const d=new Date(`${selectedDate}T12:00:00`);d.setDate(d.getDate()-7);setSelectedDate(localDateKey(d));}}>← Неделя</button><strong>{dateLabel(selectedDate)}</strong><button className="secondary" onClick={()=>{const d=new Date(`${selectedDate}T12:00:00`);d.setDate(d.getDate()+7);setSelectedDate(localDateKey(d));}}>Неделя →</button></div><div className="calendar"><span className="weekday">Пн</span><span className="weekday">Вт</span><span className="weekday">Ср</span><span className="weekday">Чт</span><span className="weekday">Пт</span><span className="weekday">Сб</span><span className="weekday">Вс</span>{(()=>{const d=new Date(`${selectedDate}T12:00:00`);const first=new Date(d.getFullYear(),d.getMonth(),1);const offset=(first.getDay()+6)%7;const daysInMonth=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();return [...Array(offset).fill(0),...Array.from({length:daysInMonth},(_,i)=>i+1)].map((n,i)=>n===0?<span key={`blank${i}`}/>:<button key={n} className={`day ${selectedDate===`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(n).padStart(2,"0")}`?"selected":""} ${hasData(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(n).padStart(2,"0")}`)?"has-event":""}`} onClick={()=>setSelectedDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(n).padStart(2,"0")}`)}>{n}</button>);})()}</div><button className="outline full" onClick={()=>setSelectedDate(todayKey())}>Перейти к сегодняшнему дню</button><div className="section-title"><h3>Данные за {dateLabel(selectedDate)}</h3><button onClick={()=>setModal("event")}>＋ Запись</button></div><div className="metric-grid"><Metric icon="🌙" label="Сон" value={sleepHours} note={`${day.sleepStart} → ${day.wakeTime}`}/><Metric icon="⚡" label="Энергия" value={`${day.energy}/10`} note="самооценка"/><Metric icon="🙂" label="Настроение" value={`${day.mood}/10`} note="самооценка"/><Metric icon="🚶" label="Шаги" value={day.steps.toLocaleString("ru-RU")} note="шагов"/><Metric icon="💧" label="Вода" value={`${day.water} мл`} note="за день"/><Metric icon="⚖️" label="Вес" value={day.weight?`${day.weight} кг`:"—"} note="запись за день"/></div>{day.note&&<div className="note-card"><strong>Заметка</strong><p>{day.note}</p></div>}<SectionTitle title={`Планы · ${dayPlans.filter(p=>p.done).length}/${dayPlans.length}`} action="＋ Добавить" onClick={()=>setModal("plan")}/>{dayPlans.length?dayPlans.map(p=><div className={`editable-row ${p.done?"is-done":""}`} key={p.id}><button className="check" onClick={()=>togglePlan(p.id)}>{p.done?"✓":""}</button><span className="item-time">{p.time}</span><strong>{p.title}</strong><button className="delete" onClick={()=>setPlans(old=>old.filter(x=>x.id!==p.id))}>×</button></div>):<Empty text="На этот день планов нет."/>}<SectionTitle title="Активности" action="＋ Добавить" onClick={()=>setModal("activity")}/>{dayActivities.length?dayActivities.map(a=><article className="activity-card" key={a.id}><div className="activity-symbol">✦</div><div className="activity-info"><strong>{a.title}</strong><p>{a.category} · {a.time}{a.note?` · ${a.note}`:""}</p></div><div className="activity-amount">{a.value} <small>{a.unit}</small></div><button className="delete" onClick={()=>setActivities(old=>old.filter(x=>x.id!==a.id))}>×</button></article>):<Empty text="Активностей не записано."/>}<SectionTitle title={`Привычки · ${doneHabits}/${todayHabits.length}`}/><div className="habit-list">{todayHabits.map(h=><div className={`habit-row ${h.completions[selectedDate]?"done":""}`} key={h.id}><button className="habit-toggle" onClick={()=>toggleHabit(h.id)}><span className="habit-icon">{h.icon}</span><span>{h.title}</span><span className="check">{h.completions[selectedDate]?"✓":""}</span></button><button className="delete" onClick={()=>setHabits(old=>old.filter(x=>x.id!==h.id))}>×</button></div>)}</div><SectionTitle title="Записи и события"/>{dayEvents.length?dayEvents.map(e=><article className="activity-card" key={e.id}><div className="activity-symbol">✎</div><div className="activity-info"><strong>{e.title}</strong><p>{e.category} · {new Date(e.createdAt).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"})}</p></div><button className="delete" onClick={()=>setEvents(old=>old.filter(x=>x.id!==e.id))}>×</button></article>):<Empty text="Записей за этот день нет."/>}</>}
+ </main><nav className="bottom-nav"><NavItem icon="⌂" label="Сегодня" active={tab==="today"} onClick={()=>setTab("today")}/><NavItem icon="◎" label="Цели" active={tab==="goals"} onClick={()=>setTab("goals")}/><NavItem icon="✓" label="Привычки" active={tab==="habits"} onClick={()=>setTab("habits")}/><NavItem icon="✦" label="AI" active={tab==="ai"} onClick={()=>setTab("ai")}/><NavItem icon="▦" label="История" active={tab==="history"} onClick={()=>setTab("history")}/></nav>
+ {modal&&<Modal title={({activity:"Добавить активность",plan:"План на день",habit:"Новая привычка",goal:"Новая цель",event:"Запись в историю"} as const)[modal]} onClose={()=>setModal(null)}>
+ {modal==="activity"&&<><label>Название<input className="modal-input" value={activityTitle} onChange={e=>setActivityTitle(e.target.value)} placeholder="Напр. Бег, прогулка, чтение" autoFocus/></label><label>Категория<select className="modal-input" value={activityCategory} onChange={e=>setActivityCategory(e.target.value)}>{["Тренировка","Прогулка","Учёба","Работа","Здоровье","Отдых","Питание","Другое"].map(x=><option key={x}>{x}</option>)}</select></label><label>Время<input className="modal-input" type="time" value={activityTime} onChange={e=>setActivityTime(e.target.value)}/></label><div className="form-grid"><label>Количество<input className="modal-input" type="number" step="any" value={activityValue} onChange={e=>setActivityValue(e.target.value)}/></label><label>Единица<select className="modal-input" value={activityUnit} onChange={e=>setActivityUnit(e.target.value)}>{metricUnits.map(x=><option key={x}>{x}</option>)}</select></label></div><label>Комментарий<input className="modal-input" value={activityNote} onChange={e=>setActivityNote(e.target.value)} placeholder="Необязательно"/></label><button className="primary full" onClick={addActivity}>Сохранить активность</button></>}
+ {modal==="plan"&&<><label>Что нужно сделать?<input className="modal-input" value={planTitle} onChange={e=>setPlanTitle(e.target.value)} placeholder="Напр. Сделать домашнее задание" autoFocus/></label><label>Время<input className="modal-input" type="time" value={planTime} onChange={e=>setPlanTime(e.target.value)}/></label><button className="primary full" onClick={addPlan}>Добавить в план</button></>}
+ {modal==="habit"&&<><label>Название привычки<input className="modal-input" value={habitTitle} onChange={e=>setHabitTitle(e.target.value)} placeholder="Напр. 10 минут растяжки" autoFocus/></label><button className="primary full" onClick={addHabit}>Создать привычку</button></>}
+ {modal==="goal"&&<><label>Название цели<input className="modal-input" value={goalTitle} onChange={e=>setGoalTitle(e.target.value)} placeholder="Напр. Пробежать 10 км" autoFocus/></label><label>Категория<select className="modal-input" value={goalCategory} onChange={e=>setGoalCategory(e.target.value as GoalCategory)}>{categories.map(x=><option key={x}>{x}</option>)}</select></label><div className="form-grid"><label>Целевое значение<input className="modal-input" type="number" step="any" value={goalTarget} onChange={e=>setGoalTarget(e.target.value)}/></label><label>Единица<select className="modal-input" value={goalUnit} onChange={e=>setGoalUnit(e.target.value)}>{metricUnits.map(x=><option key={x}>{x}</option>)}</select></label></div><button className="primary full" onClick={addGoal}>Создать цель</button></>}
+ {modal==="event"&&<><label>Что произошло?<input className="modal-input" value={eventTitle} onChange={e=>setEventTitle(e.target.value)} placeholder="Важное событие, мысль, результат" autoFocus/></label><label>Категория<select className="modal-input" value={eventCategory} onChange={e=>setEventCategory(e.target.value)}>{["Личное","Тренировка","Учёба","Работа","Здоровье","Отдых","Другое"].map(x=><option key={x}>{x}</option>)}</select></label><button className="primary full" onClick={addEvent}>Сохранить запись</button></>}
+ </Modal>}
+ {profile&&<Modal title="Профиль и резервная копия" onClose={()=>setProfile(false)}><div className="profile"><div className="big-avatar">🙂</div><h3>{displayName}</h3><p className="muted">Твои данные сохраняются на этом устройстве.</p><div className="profile-stat"><span>Целей</span><strong>{goals.length}</strong></div><div className="profile-stat"><span>Привычек</span><strong>{habits.length}</strong></div><div className="profile-stat"><span>Активностей</span><strong>{activities.length}</strong></div><div className="profile-stat"><span>Планов</span><strong>{plans.length}</strong></div><div className="profile-stat"><span>Дней с данными</span><strong>{Object.keys(days).length}</strong></div><p className="backup-note">Скачивай резервную копию после важных изменений. Данные пока локальные, облачная синхронизация не подключена.</p><button className="primary full" onClick={exportBackup}>Скачать резервную копию</button><label className="import-button">Восстановить из файла<input type="file" accept="application/json,.json" onChange={e=>importBackup(e.target.files?.[0])}/></label></div></Modal>}
+ </div>;
+ function hasData(key:string){return !!days[key]||activities.some(a=>a.date===key)||plans.some(p=>p.date===key)||events.some(e=>e.date===key)||habits.some(h=>h.completions[key]);}
 }
-
-function App() {
-  const [tab, setTab] = useState<Tab>("today");
-  const [goals, setGoals] = useState<Goal[]>(() => load("life-goals", defaultGoals));
-  const [habits, setHabits] = useState<Habit[]>(() => load("life-habits", defaultHabits));
-  const [showGoalForm, setShowGoalForm] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  const [showEventForm, setShowEventForm] = useState(false);
-  const [events, setEvents] = useState<LifeEvent[]>(() => load("life-events", []));
-  const [eventTitle, setEventTitle] = useState("");
-  const [eventCategory, setEventCategory] = useState("Личное");
-  const [newGoal, setNewGoal] = useState("");
-  const [newCategory, setNewCategory] = useState<GoalCategory>("Здоровье");
-  const [aiInput, setAiInput] = useState("");
-
-  useEffect(() => {
-    localStorage.setItem("life-goals", JSON.stringify(goals));
-  }, [goals]);
-
-  useEffect(() => {
-    localStorage.setItem("life-habits", JSON.stringify(habits));
-  }, [habits]);
-
-  useEffect(() => {
-    localStorage.setItem("life-events", JSON.stringify(events));
-  }, [events]);
-
-  const doneHabits = habits.filter((h) => h.done).length;
-  const averageProgress = Math.round(
-    goals.reduce((sum, g) => sum + Math.min(g.progress / g.target, 1), 0) /
-      Math.max(goals.length, 1) *
-      100
-  );
-
-  const telegramUser = window.Telegram?.WebApp?.initDataUnsafe.user;
-  const displayName = telegramUser?.first_name || "Твоя жизнь";
-
-  const recommendations = useMemo(
-    () => [
-      "Сегодня у тебя хороший потенциал для тренировки: привычки выполнены на 50%.",
-      "Сон и восстановление стоит держать в фокусе, если завтра планируется высокая нагрузка.",
-      "Цель «Пробежать 10 км» уже выполнена больше чем наполовину — продолжай маленькими шагами.",
-    ],
-    []
-  );
-
-  function toggleHabit(id: number) {
-    setHabits((items) =>
-      items.map((habit) =>
-        habit.id === id ? { ...habit, done: !habit.done } : habit
-      )
-    );
-  }
-
-  function addEvent() {
-    const title = eventTitle.trim();
-    if (!title) return;
-    const now = new Date();
-    setEvents((items) => [{
-      id: Date.now(),
-      title,
-      category: eventCategory,
-      createdAt: now.toISOString(),
-    }, ...items]);
-    setEventTitle("");
-    setShowEventForm(false);
-  }
-
-  function exportBackup() {
-    const backup = {
-      app: "LIFE",
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      goals,
-      habits,
-      events,
-    };
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `life-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function importBackup(file?: File) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const backup = JSON.parse(String(reader.result)) as Partial<{ goals: Goal[]; habits: Habit[]; events: LifeEvent[] }>;
-        if (!Array.isArray(backup.goals) || !Array.isArray(backup.habits) || !Array.isArray(backup.events)) {
-          throw new Error("Некорректный формат резервной копии");
-        }
-        setGoals(backup.goals);
-        setHabits(backup.habits);
-        setEvents(backup.events);
-        window.alert("Резервная копия восстановлена.");
-      } catch {
-        window.alert("Не удалось прочитать файл. Выбери резервную копию LIFE в формате JSON.");
-      }
-    };
-    reader.readAsText(file);
-  }
-
-  function addGoal() {
-    const title = newGoal.trim();
-    if (!title) return;
-    setGoals((items) => [
-      ...items,
-      {
-        id: Date.now(),
-        title,
-        category: newCategory,
-        progress: 0,
-        target: 100,
-        unit: "%",
-      },
-    ]);
-    setNewGoal("");
-    setShowGoalForm(false);
-  }
-
-  return (
-    <div className="app">
-      <header className="topbar">
-        <div>
-          <div className="eyebrow">LIFE / DIGITAL MIRROR</div>
-          <h1>{tab === "today" ? `Привет, ${displayName}` : tabTitle(tab)}</h1>
-        </div>
-        <button className="avatar-button" onClick={() => setShowProfile(true)} aria-label="Профиль">
-          <span className="pixel-avatar">🙂</span>
-        </button>
-      </header>
-
-      <main className="content">
-        {tab === "today" && (
-          <>
-            <section className="hero-card">
-              <div>
-                <span className="muted">Сегодня</span>
-                <h2>Твой день</h2>
-                <p>Не идеальный. Просто реальный.</p>
-              </div>
-              <div className="life-score">
-                <strong>{averageProgress}</strong>
-                <span>фокус</span>
-              </div>
-            </section>
-
-            <section className="metric-grid">
-              <Metric icon="🌙" label="Сон" value="7ч 42м" note="восстановление" />
-              <Metric icon="⚡" label="Энергия" value="78%" note="хорошо" />
-              <Metric icon="🚶" label="Активность" value="6.4к" note="шагов" />
-              <Metric icon="🎯" label="Цели" value={`${averageProgress}%`} note="средний прогресс" />
-            </section>
-
-            <SectionTitle title="Сегодня" action="Открыть историю" onClick={() => setTab("history")} />
-            <div className="timeline">
-              <TimelineItem time="08:10" icon="☀️" title="Начало дня" text="Проснулся и начал день" />
-              <TimelineItem time="14:30" icon="📚" title="Учёба" text="Работа над задачами" />
-              <TimelineItem time="17:30" icon="🏋️" title="Тренировка" text="Запланировано" pending />
-            </div>
-
-            <SectionTitle title="Полезные привычки" action={`${doneHabits}/${habits.length}`} />
-            <div className="habit-list">
-              {habits.map((habit) => (
-                <button
-                  className={`habit-row ${habit.done ? "done" : ""}`}
-                  key={habit.id}
-                  onClick={() => toggleHabit(habit.id)}
-                >
-                  <span className="habit-icon">{habit.icon}</span>
-                  <span>{habit.title}</span>
-                  <span className="check">{habit.done ? "✓" : ""}</span>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-
-        {tab === "goals" && (
-          <>
-            <div className="section-head">
-              <div>
-                <span className="muted">Направления жизни</span>
-                <h2>Мои цели</h2>
-              </div>
-              <button className="primary small" onClick={() => setShowGoalForm(true)}>+ Цель</button>
-            </div>
-
-            <div className="category-chips">
-              {(["Здоровье", "Учёба", "Работа", "Финансы", "Развитие", "Хобби"] as GoalCategory[]).map(
-                (category) => (
-                  <span className="chip" key={category}>{category}</span>
-                )
-              )}
-            </div>
-
-            <div className="goal-list">
-              {goals.map((goal) => {
-                const percent = Math.min(Math.round((goal.progress / goal.target) * 100), 100);
-                return (
-                  <article className="goal-card" key={goal.id}>
-                    <div className="goal-top">
-                      <div>
-                        <span className="tag">{goal.category}</span>
-                        <h3>{goal.title}</h3>
-                      </div>
-                      <strong>{percent}%</strong>
-                    </div>
-                    <div className="progress"><span style={{ width: `${percent}%` }} /></div>
-                    <div className="goal-bottom">
-                      <span>{goal.progress} / {goal.target} {goal.unit}</span>
-                      {goal.deadline && <span>до {goal.deadline}</span>}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </>
-        )}
-
-        {tab === "habits" && (
-          <>
-            <section className="hero-card compact">
-              <div>
-                <span className="muted">Без наказаний и стресса</span>
-                <h2>Полезные привычки</h2>
-                <p>Отмечай то, что реально сделал.</p>
-              </div>
-              <div className="life-score"><strong>{doneHabits}</strong><span>сегодня</span></div>
-            </section>
-            <div className="habit-list large">
-              {habits.map((habit) => (
-                <button
-                  className={`habit-row ${habit.done ? "done" : ""}`}
-                  key={habit.id}
-                  onClick={() => toggleHabit(habit.id)}
-                >
-                  <span className="habit-icon">{habit.icon}</span>
-                  <span>{habit.title}</span>
-                  <span className="check">{habit.done ? "✓" : ""}</span>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-
-        {tab === "ai" && (
-          <>
-            <section className="ai-card">
-              <div className="ai-orb">✦</div>
-              <div>
-                <span className="muted">AI LIFE ADVISER</span>
-                <h2>Я смотрю на твою жизнь целиком.</h2>
-                <p>Цели, привычки, активность, сон и история — чтобы замечать закономерности.</p>
-              </div>
-            </section>
-
-            <SectionTitle title="Что я заметил" />
-            <div className="recommendations">
-              {recommendations.map((text, index) => (
-                <article className="recommendation" key={text}>
-                  <span>{["💡", "⚠️", "🎯"][index]}</span>
-                  <p>{text}</p>
-                </article>
-              ))}
-            </div>
-
-            <div className="ai-input">
-              <input
-                value={aiInput}
-                onChange={(e) => setAiInput(e.target.value)}
-                placeholder="Спроси про свою жизнь…"
-              />
-              <button onClick={() => setAiInput("")}>→</button>
-            </div>
-          </>
-        )}
-
-        {tab === "history" && (
-          <>
-            <section className="hero-card compact">
-              <div>
-                <span className="muted">Твоя история</span>
-                <h2>Жизнь во времени</h2>
-                <p>События, изменения, достижения и воспоминания.</p>
-              </div>
-              <div className="calendar-icon">▦</div>
-            </section>
-
-            <div className="calendar">
-              {["Пн","Вт","Ср","Чт","Пт","Сб","Вс"].map((d) => <span className="weekday" key={d}>{d}</span>)}
-              {Array.from({ length: 30 }, (_, i) => (
-                <button className={`day ${i === 7 ? "selected" : ""} ${[2,7,15,21].includes(i) ? "has-event" : ""}`} key={i}>
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-
-            <div className="section-title">
-              <h3>Записи жизни</h3>
-              <button onClick={() => setShowEventForm(true)}>+ Добавить запись</button>
-            </div>
-            {events.length === 0 ? (
-              <div className="empty-state"><span>✎</span><strong>История начинается с тебя</strong><p>Добавляй события, тренировки, мысли и важные моменты. Записи сохраняются на этом устройстве.</p></div>
-            ) : (
-              <div className="timeline">
-                {events.map((event) => <TimelineItem key={event.id} time={new Date(event.createdAt).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })} icon={event.category === "Тренировка" ? "🏋️" : event.category === "Учёба" ? "📚" : event.category === "Работа" ? "💼" : "✦"} title={event.title} text={`${event.category} · ${new Date(event.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`} />)}
-              </div>
-            )}
-          </>
-        )}
-      </main>
-
-      <nav className="bottom-nav">
-        <NavItem icon="⌂" label="Сегодня" active={tab === "today"} onClick={() => setTab("today")} />
-        <NavItem icon="◎" label="Цели" active={tab === "goals"} onClick={() => setTab("goals")} />
-        <NavItem icon="✓" label="Привычки" active={tab === "habits"} onClick={() => setTab("habits")} />
-        <NavItem icon="✦" label="AI" active={tab === "ai"} onClick={() => setTab("ai")} />
-        <NavItem icon="▦" label="История" active={tab === "history"} onClick={() => setTab("history")} />
-      </nav>
-
-      {showGoalForm && (
-        <Modal title="Новая цель" onClose={() => setShowGoalForm(false)}>
-          <input className="modal-input" value={newGoal} onChange={(e) => setNewGoal(e.target.value)} placeholder="Например: пробежать 10 км" autoFocus />
-          <select className="modal-input" value={newCategory} onChange={(e) => setNewCategory(e.target.value as GoalCategory)}>
-            {["Здоровье","Учёба","Работа","Финансы","Развитие","Отношения","Хобби","Путешествия","Дом","Другое"].map(c => <option key={c}>{c}</option>)}
-          </select>
-          <button className="primary full" onClick={addGoal}>Создать цель</button>
-        </Modal>
-      )}
-
-      {showEventForm && (
-        <Modal title="Новая запись" onClose={() => setShowEventForm(false)}>
-          <input className="modal-input" value={eventTitle} onChange={(e) => setEventTitle(e.target.value)} placeholder="Что произошло?" autoFocus />
-          <select className="modal-input" value={eventCategory} onChange={(e) => setEventCategory(e.target.value)}>
-            { ["Личное", "Тренировка", "Учёба", "Работа", "Здоровье", "Отдых", "Другое"].map((c) => <option key={c}>{c}</option>) }
-          </select>
-          <button className="primary full" onClick={addEvent}>Сохранить запись</button>
-        </Modal>
-      )}
-
-      {showProfile && (
-        <Modal title="Профиль и данные" onClose={() => setShowProfile(false)}>
-          <div className="profile">
-            <div className="big-avatar">🙂</div>
-            <h3>{displayName}</h3>
-            <p className="muted">Твоя жизнь — твои данные.</p>
-            <div className="profile-stat"><span>Целей</span><strong>{goals.length}</strong></div>
-            <div className="profile-stat"><span>Привычек</span><strong>{habits.length}</strong></div>
-            <div className="profile-stat"><span>Выполнено сегодня</span><strong>{doneHabits}</strong></div>
-            <div className="profile-stat"><span>Записей в истории</span><strong>{events.length}</strong></div>
-            <p className="backup-note">Данные пока хранятся только в этом Telegram WebView. Делай резервную копию, чтобы не потерять их.</p>
-            <button className="primary full" onClick={exportBackup}>Скачать резервную копию</button>
-            <label className="import-button">Восстановить из файла<input type="file" accept="application/json,.json" onChange={(e) => importBackup(e.target.files?.[0])} /></label>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-function tabTitle(tab: Tab) {
-  return ({ today: "Сегодня", goals: "Мои цели", habits: "Привычки", ai: "AI советник", history: "История" } as const)[tab];
-}
-
-function Metric({ icon, label, value, note }: { icon: string; label: string; value: string; note: string }) {
-  return <div className="metric"><span className="metric-icon">{icon}</span><span className="muted">{label}</span><strong>{value}</strong><small>{note}</small></div>;
-}
-
-function SectionTitle({ title, action, onClick }: { title: string; action?: string; onClick?: () => void }) {
-  return <div className="section-title"><h3>{title}</h3>{action && <button onClick={onClick}>{action}</button>}</div>;
-}
-
-function TimelineItem({ time, icon, title, text, pending }: { time: string; icon: string; title: string; text: string; pending?: boolean }) {
-  return <div className={`timeline-item ${pending ? "pending" : ""}`}><span className="time">{time}</span><span className="event-icon">{icon}</span><div><strong>{title}</strong><p>{text}</p></div></div>;
-}
-
-function NavItem({ icon, label, active, onClick }: { icon: string; label: string; active: boolean; onClick: () => void }) {
-  return <button className={`nav-item ${active ? "active" : ""}`} onClick={onClick}><span>{icon}</span><small>{label}</small></button>;
-}
-
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return <div className="modal-backdrop" onClick={onClose}><div className="modal" onClick={(e) => e.stopPropagation()}><div className="modal-head"><h2>{title}</h2><button onClick={onClose}>×</button></div>{children}</div></div>;
-}
-
+function Metric({icon,label,value,note}:{icon:string;label:string;value:string;note:string}){return <div className="metric"><span className="metric-icon">{icon}</span><span className="muted">{label}</span><strong>{value}</strong><small>{note}</small></div>}
+function SectionTitle({title,action,onClick}:{title:string;action?:string;onClick?:()=>void}){return <div className="section-title"><h3>{title}</h3>{action&&<button onClick={onClick}>{action}</button>}</div>}
+function NavItem({icon,label,active,onClick}:{icon:string;label:string;active:boolean;onClick:()=>void}){return <button className={`nav-item ${active?"active":""}`} onClick={onClick}><span>{icon}</span><small>{label}</small></button>}
+function Empty({text}:{text:string}){return <div className="empty-state"><span>✦</span><p>{text}</p></div>}
+function Modal({title,onClose,children}:{title:string;onClose:()=>void;children:React.ReactNode}){return <div className="modal-backdrop" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>{title}</h2><button onClick={onClose}>×</button></div>{children}</div></div>}
 export default App;
