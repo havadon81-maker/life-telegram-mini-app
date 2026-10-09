@@ -1,19 +1,26 @@
-# LIFE — Telegram Mini App MVP
+# LIFE — Telegram Mini App v0.3
 
-Цифровое зеркало реальной жизни. Mobile-first React/TypeScript/Vite prototype.
+Офлайн-первый MVP: цели, привычки, история событий, экспорт/импорт резервной копии и кеширование приложения через Service Worker. Визуальный стиль сохранён.
 
-## Deploy to Vercel
-1. Create a GitHub repository and upload this folder.
-2. Import repository into Vercel.
-3. Framework: Vite (Vercel detects it automatically).
-4. Build command: `npm run build`.
-5. Output directory: `dist`.
-6. Deploy.
+## Что нового
+- Раздел «История» позволяет добавлять личные записи и события.
+- Данные целей, привычек и событий сохраняются в локальном хранилище WebView.
+- В профиле доступны экспорт и восстановление JSON-резервной копии.
+- Добавлены PWA manifest, иконка и Service Worker для повторного открытия интерфейса без сети после первого успешного посещения.
+- Нет `@telegram-apps/*` зависимостей.
 
-No environment variables are required for this prototype.
+## Деплой без localhost
+1. Распакуй архив.
+2. В GitHub открой текущий репозиторий и загрузи файлы из этой папки в корень, заменив старые файлы. Не загружай саму папку как вложенную папку.
+3. Дождись автоматического деплоя Vercel или нажми Redeploy.
+4. Настройки: Build Command `npm run build`, Output Directory `dist`, Framework `Vite`.
+5. Открой тот же URL в Telegram. При необходимости полностью закрой Mini App и открой снова.
 
-## Telegram
-After Vercel gives you an HTTPS URL, create a Mini App in @BotFather and set that URL as its Web App URL / menu button URL. The frontend never contains a bot token.
+## Важно про офлайн
+Service Worker кеширует оболочку интерфейса после первого онлайн-запуска. Локальные записи доступны в том же браузерном хранилище. Хранилище Telegram WebView не гарантирует синхронизацию между устройствами и может быть очищено системой — регулярно делай резервную копию в профиле.
 
-## Local data
-Goals and habits use localStorage in this prototype. The storage layer is isolated so it can later be replaced by a backend/cloud API.
+## Следующие этапы
+1. Перейти с `localStorage` на IndexedDB для более структурированного локального хранилища.
+2. Добавить миграцию данных и проверки целостности.
+3. Подключить облачную БД и авторизацию через проверенные Telegram initData на сервере. Никогда не доверять одному лишь `initDataUnsafe` для серверной авторизации.
+4. Подключить ИИ через серверный endpoint, не хранить API-ключ в клиенте.

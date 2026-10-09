@@ -1,0 +1,11 @@
+{
+  "name": "LIFE — Digital Mirror",
+  "short_name": "LIFE",
+  "description": "Персональный трекер жизни",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#080a0f",
+  "theme_color": "#0b0d12",
+  "icons": [{ "src": "/life-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
